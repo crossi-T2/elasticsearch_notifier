@@ -3,7 +3,8 @@ require 'json'
 
 class ElasticsearchNotifierController < ApplicationController
 
-  def self.send_issue_update(user, issueId, status, journal, context)
+  def self.send_issue_update(user, context)
+
     changes = []
     journal.details.each do |j|
       changes.push({
@@ -15,8 +16,8 @@ class ElasticsearchNotifierController < ApplicationController
     post_to_server({
         "type" => "issue",
         "user" => u.to_json,
-        "issue" => issueId,
-        "status" => status,
+        "issue" => context[:issue].id,
+        "status" => context[:issue].status,
         "comment" => journal.notes,
         "changes" => changes.to_json,
     })
