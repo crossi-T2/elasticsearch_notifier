@@ -1,4 +1,6 @@
 require 'rubygems'
+require 'uri'
+require 'net/http'
 require 'json'
 
 class ElasticsearchNotifierController < ApplicationController
@@ -61,6 +63,17 @@ private
   end
 
   def self.post_to_server(data)
-    Rails.logger.info("ELASTICSEARCH_NOTIFIER: Posting entry to " + self.elasticsearch_rest_endpoint + ": " + data.to_json)
+    uri = URI(self.elasticsearch_rest_endpoint)
+
+    request = Net::HTTP::Post.new(uri.request_uri)
+    request["Content-Type"] = "application/json"
+    request.body = data.to_json
+
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = (uri.scheme == "https")
+
+    response = http.request(request)
+
+    Rails.logger.info("ELASTICSEARCH_NOTIFIER: Elasticsearch's server response " + response.body)
   end
 end
