@@ -5,28 +5,27 @@ class ElasticsearchNotifierController < ApplicationController
 
   def self.send_issue_update(user, context)
 
+    u = {"email" => user.mail, "firstname" => user.firstname, "lastname" => user.lastname}
+    
     changes = []
-    journal.details.each do |j|
+
+    context[:journal].details.each do |j|
       changes.push({
         "property" => j.prop_key,
+        "old_value" => j.old_value,
         "value" => j.value
       })
     end
-    u = {"email" => user.mail, "firstname" => user.firstname, "lastname" => user.lastname}
+
     post_to_server({
-        "type" => "issue",
-        "user" => u.to_json,
-        "issue" => context[:issue].id,
-        "status" => context[:issue].status,
-        "comment" => journal.notes,
+        "type"    => "issue",
+        "action"  => "update",
+        "user"    => u.to_json,
+        "id"      => context[:issue].id,
+        "notes"   => context[:journal].notes,
         "changes" => changes.to_json,
     })
 
-    context.each do |key, value|
-      Rails.logger.info("ELASTICSEARCH_NOTIFIER: key " + key.to_s)
-    end
-
-    #Rails.logger.info("ELASTICSEARCH_NOTIFIER: Context " + context.inspect)
   end
 private
   def self.elasticsearch_rest_endpoint()
