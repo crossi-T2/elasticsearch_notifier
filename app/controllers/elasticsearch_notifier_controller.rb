@@ -3,9 +3,36 @@ require 'json'
 
 class ElasticsearchNotifierController < ApplicationController
 
+  def self.send_issue_create(user, context)
+
+    u = {
+      "email"     => user.mail,
+      "firstname" => user.firstname,
+      "lastname"  => user.lastname
+    }
+
+    info = {
+        "resource" => "issue",
+        "action"   => "create",
+        "user"     => u.to_json
+    }
+
+    data = JSON.parse(info.to_json).merge(JSON.parse(context[:issue].to_json))
+
+    # renaming 'id' to 'issue_id' in order to avoid confusion with Elasticsearch's _id field
+    # https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-id-field.html
+    data[:issue_id] = data.delete("id")
+
+    post_to_server(JSON.dump(data))
+  end
+  
   def self.send_issue_update(user, context)
 
-    u = {"email" => user.mail, "firstname" => user.firstname, "lastname" => user.lastname}
+    u = {
+      "email"     => user.mail,
+      "firstname" => user.firstname,
+      "lastname"  => user.lastname
+    }
     
     changes = []
 
@@ -18,7 +45,7 @@ class ElasticsearchNotifierController < ApplicationController
     end
 
     post_to_server({
-        "type"       => "issue",
+        "resource"   => "issue",
         "action"     => "update",
         "user"       => u.to_json,
         "issue_id"   => context[:issue].id,
@@ -27,29 +54,6 @@ class ElasticsearchNotifierController < ApplicationController
         "changes"    => changes.to_json
     })
 
-  end
-
-  def self.send_issue_create(user, context)
-
-    u = {
-      "email"     => user.mail,
-      "firstname" => user.firstname,
-      "lastname"  => user.lastname
-    }
-
-    info = {
-        "type"   => "issue",
-        "action" => "create",
-        "user"   => u.to_json
-    }
-
-    data = JSON.parse(info.to_json).merge(JSON.parse(context[:issue].to_json))
-
-    # renaming id to avoid confusion with Elasticsearch's _id field
-    # https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-id-field.html
-    data[:issue_id] = data.delete("id")
-
-    post_to_server(JSON.dump(data))
   end
 private
   def self.elasticsearch_rest_endpoint()
