@@ -7,25 +7,24 @@ class ElasticsearchNotifierController < ApplicationController
 
   def self.send_issue_create(user, context)
     begin
-      u = {
-        "email"     => user.mail,
-        "firstname" => user.firstname,
-        "lastname"  => user.lastname
-      }
-
       info = {
         "resource" => "issue",
-        "action"   => "create",
-        "user"     => u.to_json
+        "action"   => "create"
       }
 
-      data = JSON.parse(info.to_json).merge(JSON.parse(context[:issue].to_json))
+      u = { 
+        "user": {
+          "email"     => user.mail,
+          "firstname" => user.firstname,
+          "lastname"  => user.lastname
+        }
+      }
 
-      # renaming 'id' to 'issue_id' in order to avoid confusion with Elasticsearch's _id field
-      # https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-id-field.html
-      data[:issue_id] = data.delete("id")
+      #TODO: map explicitely the issue's field, for robustness
+   
+      data = JSON.parse(info.to_json).merge(JSON.parse(context[:issue].to_json).merge(JSON.parse(u.to_json)))
 
-      post_to_server(JSON.dump(data))
+      post_to_server(data)
     rescue StandardError => e
       Rails.logger.info e.class.to_s
       Rails.logger.info e.to_s
@@ -36,11 +35,13 @@ class ElasticsearchNotifierController < ApplicationController
   def self.send_issue_update(user, context)
     begin
       u = {
-        "email"     => user.mail,
-        "firstname" => user.firstname,
-        "lastname"  => user.lastname
+        "user": {
+          "email"     => user.mail,
+          "firstname" => user.firstname,
+          "lastname"  => user.lastname
+        }
       }
-    
+ 
       changes = []
 
       context[:journal].details.each do |j|
@@ -51,15 +52,17 @@ class ElasticsearchNotifierController < ApplicationController
         })
       end
 
-      post_to_server({
+      info = {
           "resource"   => "issue",
           "action"     => "update",
-          "user"       => u.to_json,
-          "issue_id"   => context[:issue].id,
+          "id      "   => context[:issue].id,
           "updated_on" => context[:issue].updated_on,
-          "notes"      => context[:journal].notes,
-          "changes"    => changes.to_json
-      })
+          "notes"      => context[:journal].notes
+      }
+ 
+      data = JSON.parse(info.to_json).merge(JSON.parse(changes.to_json).merge(JSON.parse(u.to_json)))
+
+      post_to_server(data)
     rescue StandardError => e
       Rails.logger.info e.class.to_s
       Rails.logger.info e.to_s
@@ -77,7 +80,6 @@ private
 
       request = Net::HTTP::Post.new(uri.request_uri)
       request["Content-Type"] = "application/json"
-      request["Content-Encoding"] = "text"
       request.body = data.to_json
 
       http = Net::HTTP.new(uri.host, uri.port)
@@ -86,9 +88,9 @@ private
       response = http.request(request)
 
       Rails.logger.info("ELASTICSEARCH_NOTIFIER: Payload " + data.to_json)
-      Rails.logger.info("ELASTICSEARCH_NOTIFIER: Elasticsearch's server response " + response.body)
+      Rails.logger.info("ELASTICSEARCH_NOTIFIER: Elasticsearch's response " + response.body)
       
-      raise Net::HTTPBadResponse.new(response.body) if response.code != 200
+      raise Net::HTTPBadResponse.new(response.body) if response.code.to_i < 200 || response.code.to_i > 299
     rescue StandardError => e
       Rails.logger.info e.class.to_s
       Rails.logger.info e.to_s
